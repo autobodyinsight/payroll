@@ -5,6 +5,7 @@ from app.routes.upload import router as upload_router
 
 app = FastAPI(title="Autobody Estimate Parser API")
 
+# Enable CORS for frontend integration
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -13,6 +14,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Simple HTML form for manual PDF upload
 @app.get("/", response_class=HTMLResponse)
 def root():
     return """
@@ -28,4 +30,5 @@ def root():
     </html>
     """
 
-app.include_router(upload_router, prefix="/upload")
+# Mount the upload route
+app.include_router(upload_router)

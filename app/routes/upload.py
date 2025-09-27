@@ -1,13 +1,13 @@
 from fastapi import APIRouter, UploadFile, File
+from app.services.parser import parse_pdf_lines
 from app.services.pdf_reader import extract_text_from_pdf
-from app.services.parser import parse_estimate
-from fastapi.responses import JSONResponse
 
 router = APIRouter()
 
-@router.post("/")
+@router.post("/upload/")
 async def upload_pdf(file: UploadFile = File(...)):
-    content = await file.read()
-    text = extract_text_from_pdf(content)
-    parsed_items = parse_estimate(text)
-    return JSONResponse(content={"items": parsed_items})
+    pdf_bytes = await file.read()
+    text = extract_text_from_pdf(pdf_bytes)
+    lines = text.splitlines()
+    parsed_items = parse_pdf_lines(lines)
+    return {"items": parsed_items}

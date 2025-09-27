@@ -1,57 +1,96 @@
 import re
-from collections import defaultdict
+import pdfplumber
+from utils import normalize, normalize_operation
 
-# Define known repair verbs and categories
-REPAIR_VERBS = ["rpr", "repl", "rt&i", "r&i", "o/h", "adj", "inst"]
-CATEGORY_RULES = {
-    "body": ["bumper", "grille", "valance", "cover", "hole", "panel", "lamp", "bracket"],
-    "paint": ["clear coat", "refinish", "paint", "prime", "sand"]
-}
+def merge_stacked_operations(lines: list[str]) -> list[str]:
+    merged = []
+    skip_next = False
 
-def parse_estimate(text: str):
-    lines = text.splitlines()
-    grouped = defaultdict(list)
-
-    for i, line in enumerate(lines):
-        line_clean = line.strip().lower()
-        print(f"[REARBODY REPL RULE] Scanning line: {i+1} {line_clean}")
-
-        if not any(verb in line_clean for verb in REPAIR_VERBS):
-            continue  # Skip lines without repair verbs
-
-        # Extract labor and paint hours
-        hours = re.findall(r"\d+(\.\d+)?", line_clean)
-        if not hours:
+    for i in range(len(lines)):
+        if skip_next:
+            skip_next = False
             continue
 
-        description = extract_description(line_clean)
-        category = classify_category(description)
+        current = lines[i].strip()
+        next_line = lines[i + 1].strip() if i + 1 < len(lines) else ""
 
-        # Assign hours: first is labor, second is paint (if present)
-        if len(hours) >= 1:
-            grouped["body"].append({
-                "operation": description,
-                "labor_time": float(hours[0]),
-                "category": "body"
-            })
-        if len(hours) >= 2:
-            grouped["paint"].append({
-                "operation": description,
-                "labor_time": float(hours[1]),
-                "category": "paint"
-            })
+        current_clean = current.lower()
+        next_clean = next_line.lower()
 
-    return dict(grouped)
+        if any(current_clean.endswith(op) for op in ["remove", "install"]) and re.search(r"/\s*(replace|install|remove)", next_clean):
+            combined = f"{current} {next_line.strip()}"
+            print(f"[MERGE] Combined stacked line: {combined}")
+            merged.append(combined)
+            skip_next = True
+        else:
+            merged.append(current)
 
-def extract_description(line: str):
-    # Remove symbols and trailing numbers
-    line = re.sub(r"[^a-zA-Z0-9\s\-&]", "", line)
-    line = re.sub(r"\d+(\.\d+)?", "", line)
+    return merged
+
+def extract_description(line: str) -> str:
+    line = re.sub(r"[^a-zA-Z0-9\s\-&/]", "", line)
+    line = re.sub(r"\d+(\.\d+)?$", "", line)
     return line.strip().title()
 
-def classify_category(description: str):
-    desc_lower = description.lower()
-    for category, keywords in CATEGORY_RULES.items():
-        if any(kw in desc_lower for kw in keywords):
-            return category
-    return "body"  # Default to body if unknown
+def parse_pdf(file_path: str) -> dict:
+    raw_lines = []
+
+    with pdfplumber.open(file_path) as pdf:
+        for page in pdf.pages:
+            text = page.extract_text()
+            if text:
+                raw_lines.extend(text.split('\n'))
+
+    raw_lines = merge_stacked_operations(raw_lines)
+
+    print("📄 Raw lines from PDF:")
+    for line in raw_lines:
+        print(f"[LINE] {line}")
+
+    grouped = {"body": [], "paint": []}
+    seen = set()
+    headers = []
+
+    for i, line in enumerate(raw_lines):
+        norm = normalize(line)
+        norm = normalize_operation(norm)
+
+        if line.isupper() and len(line.strip().split()) <= 3:
+            headers.append(line)
+            continue
+
+        # Match labor and optional paint hours at end of line
+        match = re.search(r"(\d+(\.\d+)?)(\s+(\d+(\.\d+)?))?$", norm)
+        if not match:
+            continue
+
+        description = extract_description(line)
+        seen.add(norm)
+
+        try:
+            labor_time = float(match.group(1))
+            grouped["body"].append({
+                "operation": description,
+                "labor_time": labor_time,
+                "category": "body"
+            })
+
+            if match.group(4):
+                paint_time = float(match.group(4))
+                grouped["paint"].append({
+                    "operation": description,
+                    "labor_time": paint_time,
+                    "category": "paint"
+                })
+
+        except ValueError:
+            print(f"[ERROR] Could not parse labor/paint from line: {norm}")
+            continue
+
+    return {
+        "raw_lines": raw_lines,
+        "seen": seen,
+        "headers": headers,
+        "body": grouped["body"],
+        "paint": grouped["paint"]
+    }
