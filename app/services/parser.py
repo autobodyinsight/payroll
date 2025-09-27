@@ -1,49 +1,57 @@
 import re
 from collections import defaultdict
 
+# Define known repair verbs and categories
+REPAIR_VERBS = ["rpr", "repl", "rt&i", "r&i", "o/h", "adj", "inst"]
+CATEGORY_RULES = {
+    "body": ["bumper", "grille", "valance", "cover", "hole", "panel", "lamp", "bracket"],
+    "paint": ["clear coat", "refinish", "paint", "prime", "sand"]
+}
+
 def parse_estimate(text: str):
     lines = text.splitlines()
     grouped = defaultdict(list)
 
-    labor_col = None
-    paint_col = None
-
     for i, line in enumerate(lines):
-        if "labor" in line.lower() and "paint" in line.lower():
-            # Identify column positions from header line
-            labor_col = line.lower().index("labor")
-            paint_col = line.lower().index("paint")
+        line_clean = line.strip().lower()
+        print(f"[REARBODY REPL RULE] Scanning line: {i+1} {line_clean}")
+
+        if not any(verb in line_clean for verb in REPAIR_VERBS):
+            continue  # Skip lines without repair verbs
+
+        # Extract labor and paint hours
+        hours = re.findall(r"\d+(\.\d+)?", line_clean)
+        if not hours:
             continue
 
-        if labor_col is None or paint_col is None:
-            continue  # Skip until header is found
+        description = extract_description(line_clean)
+        category = classify_category(description)
 
-        if len(line) < max(labor_col, paint_col):
-            continue  # Skip malformed lines
-
-        labor_str = line[labor_col:paint_col].strip()
-        paint_str = line[paint_col:].strip()
-        description = line[:labor_col].strip()
-
-        labor_time = extract_hours(labor_str)
-        paint_time = extract_hours(paint_str)
-
-        if labor_time is not None:
+        # Assign hours: first is labor, second is paint (if present)
+        if len(hours) >= 1:
             grouped["body"].append({
                 "operation": description,
-                "labor_time": labor_time,
+                "labor_time": float(hours[0]),
                 "category": "body"
             })
-
-        if paint_time is not None:
+        if len(hours) >= 2:
             grouped["paint"].append({
                 "operation": description,
-                "labor_time": paint_time,
+                "labor_time": float(hours[1]),
                 "category": "paint"
             })
 
     return dict(grouped)
 
-def extract_hours(value: str):
-    match = re.search(r"\d+(\.\d+)?", value)
-    return float(match.group()) if match else None
+def extract_description(line: str):
+    # Remove symbols and trailing numbers
+    line = re.sub(r"[^a-zA-Z0-9\s\-&]", "", line)
+    line = re.sub(r"\d+(\.\d+)?", "", line)
+    return line.strip().title()
+
+def classify_category(description: str):
+    desc_lower = description.lower()
+    for category, keywords in CATEGORY_RULES.items():
+        if any(kw in desc_lower for kw in keywords):
+            return category
+    return "body"  # Default to body if unknown
