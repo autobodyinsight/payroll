@@ -1,6 +1,6 @@
 from fastapi import APIRouter, UploadFile, File
 from app.services.parser import parse_pdf_lines
-from app.services.pdf_reader import extract_text_from_pdf
+from app.services.parser import parse_pdf
 
 router = APIRouter()
 

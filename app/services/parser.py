@@ -1,6 +1,6 @@
 import re
 import pdfplumber
-from utils import normalize, normalize_operation
+from app.utils import normalize, normalize_operation
 
 def merge_stacked_operations(lines: list[str]) -> list[str]:
     merged = []
