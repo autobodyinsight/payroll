@@ -22,25 +22,37 @@ def scan_repair_lines(lines: list[str]) -> list[str]:
     repair_lines = []
     verb_pattern = r"\b(" + "|".join(REPAIR_VERBS) + r")\b"
     skip_phrases = [
-        "authorization", "responsibility", "appraisal", "ACD", "NOTE:", "Adj.=", "Replace.", "Rpr=", "VIN=", "EPA=", "NHTSA="
+        "authorization", "Clear Coat Paint", "responsibility", "appraisal", "ACD", "NOTE:", "Adj.=", "Replace.", "Rpr=", "VIN=", "EPA=", "NHTSA="
     ]
 
     buffer = ""
-    for line in lines:
-        raw = line.strip()
+    i = 0
+    while i < len(lines):
+        raw = lines[i].strip()
         if not raw or any(skip in raw for skip in skip_phrases):
+            i += 1
             continue
 
-        # If line contains a repair verb and has context, keep it
-        if re.search(verb_pattern, raw, flags=re.IGNORECASE):
-            if len(raw.split()) > 1:
-                repair_lines.append(raw)
-            else:
-                buffer = raw  # Save verb-only line
-        elif buffer:
-            # Combine previous verb-only line with this one
+        # If line is verb-only
+        if re.search(verb_pattern, raw, flags=re.IGNORECASE) and len(raw.split()) == 1:
+            buffer = raw
+            i += 1
+            continue
+
+        # If buffer exists and current line is numeric, skip both
+        if buffer and re.fullmatch(r"\d+(\.\d+)?", raw):
+            buffer = ""
+            i += 1
+            continue
+
+        # If buffer exists, combine with current line
+        if buffer:
             combined = f"{buffer} {raw}"
             repair_lines.append(combined)
             buffer = ""
+        elif re.search(verb_pattern, raw, flags=re.IGNORECASE):
+            repair_lines.append(raw)
+
+        i += 1
 
     return repair_lines
