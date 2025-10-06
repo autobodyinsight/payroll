@@ -5,7 +5,7 @@ from app.utils import normalize
 REPAIR_VERBS = [
     "rpr", "repl", "r&i", "blnd", "refn",
     "add for", "aim", "o/h", "adjust", "set", "calibrate", "deduct for overlap",
-    "refn edges", "wheel alignment", "overlap major", "overlap minor", "clear coat"
+    "refn edges", "wheel alignment", "overlap major", "overlap minor", "clear coat", "SUBTOTALS"
 ]
 
 def normalize_operation(text: str) -> str:
@@ -30,6 +30,7 @@ def scan_repair_lines(lines: list[str]) -> list[str]:
     ]
 
     buffer = ""
+    last_index = -1
     i = 0
     while i < len(lines):
         raw = lines[i].strip()
@@ -56,6 +57,13 @@ def scan_repair_lines(lines: list[str]) -> list[str]:
             i += 1
             continue
 
+        # If current line is numeric and we have a previous repair line, append labor time
+        # Only stitch labor time if it matches strict format: one digit before and after the dot (e.g. "3.3")
+        if re.fullmatch(r"\d\.\d", raw) and last_index >= 0:
+            repair_lines[last_index] += f" {raw}"
+            i += 1
+            continue
+
         # Combine buffer with current line if needed
         if buffer:
             combined = f"{buffer} {raw}"
@@ -67,6 +75,7 @@ def scan_repair_lines(lines: list[str]) -> list[str]:
         # Only keep lines with a repair verb
         if re.search(verb_pattern, norm, flags=re.IGNORECASE):
             repair_lines.append(norm)
+            last_index = len(repair_lines) - 1  # Track index for labor time stitching
 
         i += 1
 
