@@ -1,3 +1,4 @@
+import re
 from fastapi import FastAPI, UploadFile, File
 from fastapi.responses import HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -42,7 +43,23 @@ async def upload_pdf(file: UploadFile = File(...)):
     text = extract_text_from_pdf(pdf_bytes)
     lines = text.splitlines()
     repair_lines = scan_repair_lines(lines)
-    raw_output = "\n".join(repair_lines)
+    formatted_lines = []
+    for line in repair_lines:
+        parts = line.split()
+        op_parts = []
+        time_parts = []
+        for part in parts:
+            if re.fullmatch(r"\d\.\d", part):  # Only match time values like 5.0, 3.3
+            
+                time_parts.append(part)
+            else:
+                op_parts.append(part)
+        op_text = " ".join(op_parts)
+        time_text = " ".join(f"{t:>5}" for t in time_parts)
+          # Right-align each time value
+        formatted_lines.append(f"{op_text:<50}{time_text}")
+
+    raw_output = "\n".join(formatted_lines)
     escaped_output = html.escape(raw_output)
 
     return f"""

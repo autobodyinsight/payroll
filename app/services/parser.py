@@ -5,7 +5,7 @@ from app.utils import normalize
 REPAIR_VERBS = [
     "rpr", "repl", "r&i", "blnd", "refn",
     "add for", "aim", "o/h", "adjust", "set", "calibrate", "deduct for overlap",
-    "refn edges", "wheel alignment", "overlap major", "overlap minor", "clear coat", "SUBTOTALS"
+    "refn edges", "wheel alignment", "overlap major", "overlap minor", "clear coat"
 ]
 
 def normalize_operation(text: str) -> str:
