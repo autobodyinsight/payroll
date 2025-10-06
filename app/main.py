@@ -1,20 +1,25 @@
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi import FastAPI, UploadFile, File
 from fastapi.responses import HTMLResponse
-from app.routes.upload import router as upload_router
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.routing import APIRouter
+import html
 
-app = FastAPI(title="Autobody Estimate Parser API")
+from app.services.parser import scan_repair_lines
+from app.services.pdf_reader import extract_text_from_pdf
 
-# Enable CORS for frontend integration
+app = FastAPI()
+upload_router = APIRouter()
+
+# Enable CORS for Wix or other frontend integrations
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["*"],  # Replace with your Wix domain for production
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Simple HTML form for manual PDF upload
+# HTML form for manual PDF upload
 @app.get("/", response_class=HTMLResponse)
 def root():
     return """
@@ -26,6 +31,27 @@ def root():
                 <input name="file" type="file" />
                 <input type="submit" value="Upload" />
             </form>
+        </body>
+    </html>
+    """
+
+# Upload route with clean output formatting
+@upload_router.post("/upload/", response_class=HTMLResponse)
+async def upload_pdf(file: UploadFile = File(...)):
+    pdf_bytes = await file.read()
+    text = extract_text_from_pdf(pdf_bytes)
+    lines = text.splitlines()
+    repair_lines = scan_repair_lines(lines)
+    raw_output = "\n".join(repair_lines)
+    escaped_output = html.escape(raw_output)
+
+    return f"""
+    <html>
+        <head><title>Estimate Results</title></head>
+        <body>
+            <h2>Repair Lines from Estimate</h2>
+            <pre>{escaped_output}</pre>
+            <br><a href="/">Upload Another</a>
         </body>
     </html>
     """
