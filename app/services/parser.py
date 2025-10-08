@@ -1,7 +1,6 @@
 import re
 from app.utils import normalize
 
-# Repair-related verbs to detect valid operations
 REPAIR_VERBS = [
     "rpr", "repl", "r&i", "blnd", "refn",
     "add for", "aim", "o/h", "adjust", "set", "calibrate", "deduct for overlap",
@@ -10,12 +9,9 @@ REPAIR_VERBS = [
 
 def normalize_operation(text: str) -> str:
     text = normalize(text)
-
-    # Collapse repeated verbs like "R&I R&I"
     for verb in REPAIR_VERBS:
         pattern = rf"\b({verb})\b\s+\1\b"
         text = re.sub(pattern, r"\1", text, flags=re.IGNORECASE)
-
     return text.strip()
 
 def scan_repair_lines(lines: list[str]) -> list[str]:
@@ -38,12 +34,17 @@ def scan_repair_lines(lines: list[str]) -> list[str]:
             i += 1
             continue
 
-        # Skip duplicate supplement lines (S01–S06)
         if raw.startswith(("S01", "S02", "S03", "S04", "S05", "S06")):
             if raw in seen_supplement_lines:
                 i += 1
                 continue
             seen_supplement_lines.add(raw)
+
+        # Treat solid number as block boundary
+        if re.fullmatch(r"\d+", raw):
+            buffer = ""
+            i += 1
+            continue
 
         # If line is verb-only
         if re.search(verb_pattern, raw, flags=re.IGNORECASE) and len(raw.split()) == 1:
@@ -51,16 +52,14 @@ def scan_repair_lines(lines: list[str]) -> list[str]:
             i += 1
             continue
 
-        # If buffer exists and current line is numeric, skip both
-        if buffer and re.fullmatch(r"\d+(\.\d+)?", raw):
-            buffer = ""
-            i += 1
-            continue
-
-        # If current line is numeric and we have a previous repair line, append labor time
-        # Only stitch labor time if it matches strict format: one digit before and after the dot (e.g. "3.3")
+        # If current line is a time value and we have a previous repair line
         if re.fullmatch(r"\d\.\d", raw) and last_index >= 0:
-            repair_lines[last_index] += f" {raw}"
+            if re.search(r"\d\.\d$", repair_lines[last_index]):
+                # Already has labor, this must be paint
+                repair_lines[last_index] += f" {raw}"
+            else:
+                # First time value, assume labor
+                repair_lines[last_index] += f" {raw}"
             i += 1
             continue
 
@@ -75,8 +74,8 @@ def scan_repair_lines(lines: list[str]) -> list[str]:
         # Only keep lines with a repair verb
         if re.search(verb_pattern, norm, flags=re.IGNORECASE):
             repair_lines.append(norm)
-            last_index = len(repair_lines) - 1  # Track index for labor time stitching
+            last_index = len(repair_lines) - 1
 
         i += 1
 
-    return list(dict.fromkeys(repair_lines))  # Deduplicate while preserving order
+    return list(dict.fromkeys(repair_lines))
