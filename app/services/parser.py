@@ -54,12 +54,19 @@ def scan_repair_lines(lines: list[str]) -> list[str]:
 
         # If current line is a time value and we have a previous repair line
         if re.fullmatch(r"\d\.\d", raw) and last_index >= 0:
-            if re.search(r"\d\.\d$", repair_lines[last_index]):
-                # Already has labor, this must be paint
-                repair_lines[last_index] += f" {raw}"
+            prev_line = repair_lines[last_index]
+            verb = prev_line.split()[0].lower()
+
+            if verb in {"refn", "blnd", "clear coat"}:
+            # Always treat as paint
+                repair_lines[last_index] += f"     {raw}"
+            elif not re.search(r"\d\.\d", prev_line):
+            # First time value → body
+                repair_lines[last_index] += f"     {raw}"
             else:
-                # First time value, assume labor
-                repair_lines[last_index] += f" {raw}"
+            # Second time value → paint
+                repair_lines[last_index] += f"     {raw}"
+
             i += 1
             continue
 

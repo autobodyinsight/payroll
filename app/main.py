@@ -43,21 +43,23 @@ async def upload_pdf(file: UploadFile = File(...)):
     text = extract_text_from_pdf(pdf_bytes)
     lines = text.splitlines()
     repair_lines = scan_repair_lines(lines)
-    formatted_lines = []
+    formatted_lines = ["{:50}{:>8}{:>10}".format("", "BODY", "PAINT")]
     for line in repair_lines:
-        parts = line.split()
-        op_parts = []
-        time_parts = []
+        parts = line.strip().split()
+        body = ""
+        paint = ""
+        desc = []
+
         for part in parts:
-            if re.fullmatch(r"\d\.\d", part):  # Only match time values like 5.0, 3.3
-            
-                time_parts.append(part)
+            if re.fullmatch(r"\d\.\d", part):
+                if not body:
+                    body = part
+                else:
+                    paint = part
             else:
-                op_parts.append(part)
-        op_text = " ".join(op_parts)
-        time_text = " ".join(f"{t:>5}" for t in time_parts)
-          # Right-align each time value
-        formatted_lines.append(f"{op_text:<50}{time_text}")
+                desc.append(part)
+
+        formatted_lines.append("{:<50}{:>8}{:>10}".format(" ".join(desc), body, paint))
 
     raw_output = "\n".join(formatted_lines)
     escaped_output = html.escape(raw_output)
